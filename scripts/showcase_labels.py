@@ -20,6 +20,8 @@ SCENES = [
     ("Upper abdomen, 5 options", "auto", ["pancreas", "left adrenal gland", "kidneys", "IVC", "aorta"]),
     ("Coronal abdomen, 4 options", "coronal", ["liver", "spleen", "psoas", "urinary bladder"]),
     ("Neck, 4 options", "auto", ["thyroid", "trachea", "esophagus", "common carotid arteries"]),
+    ("Chest, 5 options", "auto", ["heart", "esophagus", "aorta", "right middle lobe", "left lower lobe"]),
+    ("Coronal chest, 4 options", "coronal", ["right upper lobe", "left lower lobe", "heart", "trachea"]),
 ]
 CELL = 460
 
@@ -50,7 +52,7 @@ def main() -> None:
         letters = "ABCDEFGH"
         specs = [LabelSpec(letters[k], g) for k, g in enumerate(resolved)]
         for j, pr in enumerate(a.presets):
-            r = render(c.case_id, c.axis, c.slice, specs, RenderOptions(**PRESETS[pr], size=640))
+            r = render(c.case_id, c.axis, c.slice, specs, RenderOptions(**PRESETS[pr], size=640), level=c.level)
             im = r.image
             im.thumbnail((CELL - 8, CELL - 8))
             sheet.paste(im, (j * CELL + 4 + (CELL - 8 - im.width) // 2, y + 30))
