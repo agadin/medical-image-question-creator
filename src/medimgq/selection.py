@@ -28,7 +28,7 @@ import pandas as pd
 import pyarrow.dataset as pads
 
 from .catalog import VERTEBRAE
-from .config import INDEX_DIR
+from .config import BLOCKLIST, INDEX_DIR
 
 VOXEL_MM2 = 1.5 * 1.5  # TotalSegmentator v2 is resampled to 1.5 mm isotropic
 
@@ -47,16 +47,16 @@ CLASSICAL: dict[str, tuple[str, tuple[str, str] | None]] = {
     "adrenal_gland_left": ("axial", ("T11", "L1")),
     "adrenal_gland_right": ("axial", ("T11", "L1")),
     "portal_vein_and_splenic_vein": ("axial", ("T12", "L1")),
-    "inferior_vena_cava": ("axial", ("T12", "L3")),
-    "aorta": ("axial", ("T12", "L3")),
+    "inferior_vena_cava": ("axial", None),
+    "aorta": ("axial", None),
     "small_bowel": ("axial", ("L3", "L5")),
     "colon": ("axial", ("L2", "L5")),
     "iliopsoas_left": ("axial", ("L3", "L5")),
     "iliopsoas_right": ("axial", ("L3", "L5")),
     "urinary_bladder": ("axial", ("S1", "S1")),
     "prostate": ("axial", None),
-    "esophagus": ("axial", ("T4", "T8")),
-    "trachea": ("axial", ("T1", "T4")),
+    "esophagus": ("axial", None),
+    "trachea": ("axial", ("C6", "T4")),
     "heart": ("axial", ("T6", "T9")),
     "superior_vena_cava": ("axial", ("T3", "T5")),
     "brachiocephalic_trunk": ("axial", ("T1", "T3")),
@@ -83,6 +83,16 @@ CLASSICAL: dict[str, tuple[str, tuple[str, str] | None]] = {
     **{f"vertebrae_{v}": ("sagittal", None) for v in VERTEBRAE},
 }
 
+# Tubular structures: visibility is judged against the structure's typical
+# cross-section in the case (median), not its maximum (e.g. the aortic arch).
+TUBULAR = {
+    "aorta", "inferior_vena_cava", "superior_vena_cava", "esophagus", "trachea", "spinal_cord",
+    "portal_vein_and_splenic_vein", "brachiocephalic_trunk", "brachiocephalic_vein_left",
+    "brachiocephalic_vein_right", "common_carotid_artery_left", "common_carotid_artery_right",
+    "subclavian_artery_left", "subclavian_artery_right", "iliac_artery_left", "iliac_artery_right",
+    "iliac_vena_left", "iliac_vena_right", "pulmonary_vein",
+}
+
 _VORDER = {v: i for i, v in enumerate(VERTEBRAE)}
 _AXIS = {"sagittal": 0, "coronal": 1, "axial": 2}
 
@@ -97,11 +107,13 @@ class Filters:
     age_min: float | None = None
     age_max: float | None = None
     exclude_cases: list[str] = field(default_factory=list)
-    min_area_mm2: float = 150.0  # per target structure on the chosen slice
+    min_area_mm2: float | None = None  # per target on the slice; None = 30% of that structure's typical max, >= 20
     min_visibility: float = 0.4  # per target: area / its max area on this axis
     allow_edge_truncated: bool = False  # target structure cut off by the scan volume
     allow_body_truncated: bool = False  # patient's body cut off by the field of view on this slice
-    allow_arms_in_fov: bool = False  # axial only: arms down beside the trunk
+    allow_arms_in_fov: bool = False  # axial slices at T10 or below: arms down beside the trunk
+    end_margin_mm: float = 12.0  # skip axial slices this close to either end of the scan
+    use_blocklist: bool = True  # skip cases listed in qc/blocklist.csv
     max_noise_hu: float | None = 45.0  # robust SD of HU in muscle; None disables
     phase: list[str] | None = None  # non_contrast | arterial | venous | contrast_unknown_phase
 
@@ -131,6 +143,13 @@ def structures() -> pd.DataFrame:
 @lru_cache(maxsize=1)
 def levels() -> pd.DataFrame:
     return pd.read_parquet(INDEX_DIR / "levels.parquet")
+
+
+@lru_cache(maxsize=1)
+def blocklist() -> frozenset[str]:
+    if not BLOCKLIST.exists():
+        return frozenset()
+    return frozenset(pd.read_csv(BLOCKLIST, comment="#").case_id.astype(str).str.strip())
 
 
 @lru_cache(maxsize=1)
@@ -179,6 +198,8 @@ def eligible_cases(f: Filters, required: list[str]) -> list[str]:
         m &= c.age <= f.age_max
     if f.exclude_cases:
         m &= ~c.case_id.isin(f.exclude_cases)
+    if f.use_blocklist:
+        m &= ~c.case_id.isin(blocklist())
     ids = set(c.case_id[m])
     if f.max_noise_hu is not None or f.phase:
         q = quality()
@@ -237,30 +258,46 @@ def candidates(
 
     df = slice_rows(targets, axis, ids)
     df["area_mm2"] = df.area * VOXEL_MM2
-    case_max = df.groupby(["case_id", "structure"]).area.transform("max")
-    df["vis"] = df.area / case_max
+    g = df.groupby(["case_id", "structure"]).area
+    case_max = g.transform("max")
+    ref = case_max.where(~df.structure.isin(TUBULAR), g.transform("median"))
+    df["vis"] = (df.area / ref).clip(upper=1.0)
     # Typicality: penalize cases where the structure is unusually small (e.g. a
     # contracted gallbladder) relative to the median case's largest cross-section.
-    med = df.groupby(["case_id", "structure"]).area.max().groupby("structure").median()
+    med = g.max().groupby("structure").median()
     typ = (case_max / df.structure.map(med)).clip(upper=1.0)
     df["vis"] = df.vis * typ
+    if f.min_area_mm2 is None:
+        df["min_area"] = (0.3 * df.structure.map(med) * VOXEL_MM2).clip(lower=20.0)
+    else:
+        df["min_area"] = f.min_area_mm2
+    df["area_ok"] = df.area_mm2 >= df.min_area
     area = df.pivot_table(index=["case_id", "slice"], columns="structure", values="area_mm2", fill_value=0.0)
     vis = df.pivot_table(index=["case_id", "slice"], columns="structure", values="vis", fill_value=0.0)
     area, vis = area.reindex(columns=targets, fill_value=0.0), vis.reindex(columns=targets, fill_value=0.0)
-    ok = (area.min(axis=1) >= f.min_area_mm2) & (vis.min(axis=1) >= f.min_visibility)
+    area_ok = df.pivot_table(index=["case_id", "slice"], columns="structure", values="area_ok",
+                             fill_value=False, aggfunc="max").reindex(index=area.index, columns=targets, fill_value=False)
+    ok = area_ok.all(axis=1) & (vis.min(axis=1) >= f.min_visibility)
     sq = slice_quality()
     key = pd.MultiIndex.from_arrays([area.index.get_level_values(0), np.full(len(area), axis, np.int8),
                                      area.index.get_level_values(1)])
     if not f.allow_body_truncated:
         ok &= ~sq.body_truncated.reindex(key, fill_value=True).to_numpy()
-    if axis == 2 and not f.allow_arms_in_fov:
-        ok &= ~sq.arms_in_fov.reindex(key, fill_value=False).to_numpy()
-
     lv = None
     if axis == 2:
         lv = levels().set_index(["case_id", "slice"]).level
         lv = lv.reindex(area.index)
         lv_ord = lv.map(_VORDER)
+        if not f.allow_arms_in_fov:
+            # shoulders always contain the humeral heads; only flag arms beside the abdomen/pelvis
+            low = (lv_ord >= _VORDER["T10"]).to_numpy()
+            ok &= ~(sq.arms_in_fov.reindex(key, fill_value=False).to_numpy() & low)
+        if f.end_margin_mm:
+            nz = cases().set_index("case_id").shape_z
+            sl = area.index.get_level_values("slice").to_numpy()
+            n = nz.reindex(area.index.get_level_values("case_id")).to_numpy()
+            mg = int(round(f.end_margin_mm / 1.5))
+            ok &= (sl >= mg) & (sl < n - mg)
 
     used = strategy
     if strategy == "index":

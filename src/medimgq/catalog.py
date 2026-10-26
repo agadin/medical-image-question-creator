@@ -160,6 +160,18 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def _plural(s: str) -> str:
+    """Pluralize the head noun: 'common carotid artery' -> 'common carotid arteries'."""
+    head, _, tail = s.partition(" of ")  # 'lower lobe of lung' keeps 'of lung'
+    if head.endswith("y"):
+        head = head[:-1] + "ies"
+    elif head.endswith(("s", "x")):
+        head += "es"
+    else:
+        head += "s"
+    return f"{head} of {tail}" if tail else head
+
+
 def _build_lookup() -> dict[str, tuple[str, ...]]:
     lookup: dict[str, tuple[str, ...]] = {}
     for s in STRUCTURES.values():
@@ -176,7 +188,9 @@ def _build_lookup() -> dict[str, tuple[str, ...]]:
                     bare = n[len(s.side) + 1 :]
                     other = s.name.replace(f"_{s.side}", "_right" if s.side == "left" else "_left")
                     if other in STRUCTURES:
-                        lookup.setdefault(bare, tuple(sorted((s.name, other))))
+                        pair = tuple(sorted((s.name, other)))
+                        lookup.setdefault(bare, pair)
+                        lookup.setdefault(_plural(bare), pair)
     return lookup
 
 

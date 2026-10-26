@@ -4,8 +4,8 @@ An MCP server that another AI can call to generate **labeled medical images** fo
 medical-school practice exams, together with a machine-readable **answer key**.
 CT first (TotalSegmentator, 117 structures); X-ray and MRI later.
 
-> Status: early development. Catalog, dataset/quality index, and slice selection work;
-> label rendering and the MCP server are in progress.
+> Status: early development. Catalog, dataset/quality index, slice selection, and label rendering work;
+> the question generator and MCP server are in progress.
 
 ## Question type: `labeled`
 
@@ -46,7 +46,10 @@ uv run python scripts/compare_strategies.py     # contact sheet comparing slice 
 - `src/medimgq/quality.py` — per-case noise and contrast-phase estimate; per-slice body truncation and arms-in-field
 - `src/medimgq/volume.py` — CT/mask loading, radiological slice extraction, window presets
 - `src/medimgq/selection.py` — slice-selection strategies (classical, max_visibility, max_area, random, level, index) and filters
+- `src/medimgq/render.py` — label rendering (margin arrows, short arrows, on-structure, outlines; presets) and key geometry
 - `scripts/compare_strategies.py` — renders a strategy-comparison contact sheet
+- `scripts/showcase_labels.py` — renders the same scenes with every label preset
+- `qc/blocklist.csv` — cases excluded after human review
 - `src/medimgq/config.py` — paths (override with `MEDIMGQ_TS_ROOT`, `MEDIMGQ_INDEX_DIR`, `MEDIMGQ_OUTPUT_DIR`)
 
 ## Intended use

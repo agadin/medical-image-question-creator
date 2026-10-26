@@ -73,8 +73,10 @@ def quality_case(case_id: str, root: str) -> tuple[dict, pd.DataFrame]:
     rows = []
     for axis in range(3):
         others = [x for x in range(3) if x != axis]
+        # Only side-to-side edges count; every coronal/sagittal slice touches the
+        # top/bottom of the scan range, which is not field-of-view truncation.
         edge = np.zeros(ct.shape, bool)
-        for o in others:
+        for o in (x for x in others if x != 2):
             sl = [slice(None)] * 3
             sl[o] = 0
             edge[tuple(sl)] = True

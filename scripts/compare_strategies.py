@@ -55,7 +55,7 @@ def render_cell(cand, targets: list[str], window: str = "soft_tissue") -> Image.
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--sets", nargs="*", default=DEFAULT_SETS, help='target sets, structures separated by ";"')
+    p.add_argument("--sets", nargs="*", default=DEFAULT_SETS, help='target sets, structures separated by ";", optional "@view" suffix')
     p.add_argument("--strategies", nargs="*", default=STRATEGIES)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", type=Path, default=Path("outputs/strategies.png"))
@@ -66,12 +66,14 @@ def main() -> None:
     for j, s in enumerate(a.strategies):
         d.text((220 + j * CELL + 8, 4), s, fill="white", font=ImageFont.load_default(15))
     for i, spec in enumerate(a.sets):
+        spec, _, view = spec.partition("@")
+        view = view.strip() or "auto"
         groups = [resolve(x.strip()) for x in spec.split(";")]
         targets = [n for g in groups for n in g]
         y = 24 + i * CELL
-        d.multiline_text((8, y + 8), spec.replace("; ", "\n"), fill="white", font=ImageFont.load_default(14))
+        d.multiline_text((8, y + 8), spec.strip().replace("; ", "\n") + (f"\n[{view}]" if view != "auto" else ""), fill="white", font=ImageFont.load_default(14))
         for j, strat in enumerate(a.strategies):
-            c = candidates(targets, strategy=strat, rng=np.random.default_rng(a.seed + i))
+            c = candidates(targets, view=view, strategy=strat, rng=np.random.default_rng(a.seed + i))
             if not c:
                 d.text((220 + j * CELL + 8, y + CELL // 2), "no candidate", fill="red")
                 continue
