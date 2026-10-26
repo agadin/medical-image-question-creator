@@ -4,8 +4,8 @@ An MCP server that another AI can call to generate **labeled medical images** fo
 medical-school practice exams, together with a machine-readable **answer key**.
 CT first (TotalSegmentator, 117 structures); X-ray and MRI later.
 
-> Status: early development. The structure catalog and dataset indexer work;
-> slice selection, rendering, and the MCP server are in progress.
+> Status: early development. Catalog, dataset/quality index, and slice selection work;
+> label rendering and the MCP server are in progress.
 
 ## Question type: `labeled`
 
@@ -34,13 +34,19 @@ Every generated image carries the dataset attribution in a footer.
 
 ```bash
 uv sync
-uv run python -m medimgq.indexer --workers 12   # one-time, writes data/index/*.parquet
+uv run python -m medimgq.indexer --workers 12   # one-time (~4 min), structure/slice index
+uv run python -m medimgq.quality --workers 12   # one-time, noise / contrast phase / FOV index
+uv run python scripts/compare_strategies.py     # contact sheet comparing slice strategies
 ```
 
 ## Layout
 
 - `src/medimgq/catalog.py` — canonical structure names, display names, synonyms, groups, name resolution
 - `src/medimgq/indexer.py` — builds the per-case / per-structure / per-slice index used for slice search
+- `src/medimgq/quality.py` — per-case noise and contrast-phase estimate; per-slice body truncation and arms-in-field
+- `src/medimgq/volume.py` — CT/mask loading, radiological slice extraction, window presets
+- `src/medimgq/selection.py` — slice-selection strategies (classical, max_visibility, max_area, random, level, index) and filters
+- `scripts/compare_strategies.py` — renders a strategy-comparison contact sheet
 - `src/medimgq/config.py` — paths (override with `MEDIMGQ_TS_ROOT`, `MEDIMGQ_INDEX_DIR`, `MEDIMGQ_OUTPUT_DIR`)
 
 ## Intended use
