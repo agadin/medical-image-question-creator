@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Datasets and generated data (large; licensed separately)
+Totalsegmentator_dataset_v201/
+Totalsegmentator_dataset_v201.zip
+amos22/
+amos22.zip
+*.nii
+*.nii.gz
+data/
+outputs/
+.DS_Store

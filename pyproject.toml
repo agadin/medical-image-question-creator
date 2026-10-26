@@ -1,0 +1,24 @@
+[project]
+name = "medimgq"
+version = "0.1.0"
+description = "MCP tool that generates labeled CT images and answer keys for medical-school practice questions"
+readme = "README.md"
+authors = [
+    { name = "agadin", email = "a.gadin@wustl.edu" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=2.3.0",
+    "nibabel>=5.4.2",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "pillow>=13.0.0",
+    "pyarrow>=26.0.0",
+    "pydantic>=2.14.1",
+    "scikit-image>=0.26.0",
+    "scipy>=1.18.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
