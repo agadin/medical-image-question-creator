@@ -5,6 +5,7 @@ The calling AI writes the questions; these tools give it the pieces:
 - ``list_structures`` / ``dataset_info``  what can be labeled and filtered on
 - ``find_slices``                         rank (case, view, slice) showing given structures
 - ``slice_contents``                      what else is visible on a slice (for distractors)
+- ``list_findings`` / ``find_findings``   real pathology found by measuring (aneurysm, goiter, cysts, ...)
 - ``render_image``                        render a specific slice with labels (+ hotspot masks)
 - ``labeled_image``                       find + render in one call
 - ``batch_labeled_images``                many ``labeled_image`` requests -> folder + manifest.jsonl
@@ -19,6 +20,7 @@ import hashlib
 import io
 import json
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -30,6 +32,7 @@ from mcp.server import MCPServer
 from . import selection as sel
 from .catalog import GROUPS, STRUCTURES, UnknownStructureError, resolve
 from .config import OUTPUT_DIR, TS_ATTRIBUTION
+from .findings import FINDINGS
 from .render import PRESETS, LabelSpec, RenderOptions, render
 from .volume import WINDOWS
 
@@ -54,6 +57,9 @@ StrategyT = Literal["classical", "max_visibility", "max_area", "random", "level"
 class Label(BaseModel):
     label: str = Field(description='Text drawn on the image, e.g. "A" or "1". "" draws an arrow with no text.')
     structures: list[str] = Field(description="One or more structure names; all share this label.")
+    component: Literal["largest", "anterior", "posterior", "left", "right", "superior", "inferior"] = Field(
+        "largest", description="Which piece to point at when a structure shows as several pieces on the slice, "
+        "e.g. 'posterior' for the descending aorta on an axial slice that also shows the aortic root.")
 
 
 class HotspotZone(BaseModel):
@@ -120,6 +126,18 @@ def _resolve_all(names: list[str]) -> list[str]:
     return out
 
 
+@lru_cache(maxsize=1)
+def _findings():
+    import pandas as pd
+
+    from .config import INDEX_DIR
+
+    path = INDEX_DIR / "findings.parquet"
+    if not path.exists():
+        raise ValueError("Findings index not built. Run: uv run python -m medimgq.findings")
+    return pd.read_parquet(path)
+
+
 def _filters(f: CaseFilters | None) -> sel.Filters:
     return sel.Filters(**(f.model_dump() if f else {}))
 
@@ -142,12 +160,22 @@ def _out_path(output_dir: str | None, name: str | None, fmt: str, seed_text: str
     return d / f"{stem}.{fmt}"
 
 
+def _shuffle_labels(labels: list[Label], seed: int | None) -> list[Label]:
+    """Randomly reassign the label texts (e.g. "1".."5") among the labeled groups, so the
+    answer isn't always the first label the caller listed. Empty labels stay unlabeled arrows."""
+    texts = [l.label for l in labels if l.label]
+    order = np.random.default_rng(seed).permutation(len(texts))
+    it = iter(texts[i] for i in order)
+    out = [l.model_copy(update=dict(label=next(it))) if l.label else l for l in labels]
+    return sorted(out, key=lambda l: (not l.label, l.label))
+
+
 def _render_and_save(case_id: str, view: str, slice_index: int, labels: list[Label],
                      settings: RenderSettings, hotspot_zones: list[HotspotZone] | None,
                      output_dir: str | None, name: str | None, include_base64: bool,
                      level: str | None = None, extra: dict | None = None,
                      context_structures: list[str] | None = None) -> dict:
-    specs = [LabelSpec(l.label, _resolve_all(l.structures)) for l in labels]
+    specs = [LabelSpec(l.label, _resolve_all(l.structures), l.component) for l in labels]
     o = settings.options()
     # Hotspot zones and context structures also drive cropping and the auto window
     # (a bare hotspot image has no labels).
@@ -239,6 +267,49 @@ def dataset_info() -> dict:
 
 
 @mcp.tool()
+def list_findings() -> dict:
+    """Pathology this dataset actually contains, found by measuring the segmentations
+    (aneurysms, goiter, renal cysts, cardiomegaly, organ enlargement), with case counts.
+    Also lists the coarse per-scan pathology categories from the dataset's metadata."""
+    df = _findings()
+    flagged = df[df.flagged].finding.value_counts()
+    return dict(
+        measured_findings=[dict(name=f.name, title=f.title, measure=f.measure, unit=f.unit, threshold=f.threshold,
+                                normal=f.normal, cases_flagged=int(flagged.get(f.name, 0)),
+                                structures_to_label=list(f.structures), note=f.note)
+                           for f in FINDINGS.values()],
+        metadata_pathology=sel.cases().pathology.value_counts().to_dict(),
+        notes=["Thresholds are screening values for finding teaching cases, not diagnoses. Look at the image.",
+               "Use find_findings to get cases, then render_image with the returned case_id and slice."],
+    )
+
+
+@mcp.tool()
+def find_findings(finding: str, min_value: float | None = None, max_value: float | None = None,
+                  filters: CaseFilters | None = None, limit: int = 10, most_severe_first: bool = True) -> dict:
+    """Cases showing a measured finding (see list_findings), with the axial slice that best shows it.
+    ``min_value`` defaults to the finding's threshold. Render a result with render_image(case_id, 'axial',
+    slice, labels=[...structures_to_label])."""
+    if finding not in FINDINGS:
+        raise ValueError(f"Unknown finding {finding!r}; choose from {list(FINDINGS)}")
+    f = FINDINGS[finding]
+    df = _findings()
+    d = df[(df.finding == finding) & (df.value >= (f.threshold if min_value is None else min_value))]
+    if max_value is not None:
+        d = d[d.value <= max_value]
+    if f.sex:
+        d = d[d.case_id.isin(set(sel.cases().case_id[sel.cases().gender == f.sex]))]
+    d = d[d.case_id.isin(sel.filtered_case_ids(_filters(filters)))]
+    d = d.sort_values("value", ascending=not most_severe_first).head(limit)
+    return dict(
+        finding=f.title, measure=f.measure, unit=f.unit, threshold=f.threshold, normal=f.normal, note=f.note,
+        structures_to_label=list(f.structures),
+        cases=[dict(case_id=r.case_id, value=r.value, view="axial", slice=int(r.slice),
+                    vertebral_level=r.level, case=_case_meta(r.case_id)) for r in d.itertuples()],
+    )
+
+
+@mcp.tool()
 def find_slices(structures: list[str], view: ViewT = "auto", strategy: StrategyT = "classical",
                 level: str | None = None, slice_index: int | None = None,
                 filters: CaseFilters | None = None, limit: int = 10, seed: int | None = None) -> dict:
@@ -278,9 +349,13 @@ def slice_contents(case_id: str, view: Literal["axial", "coronal", "sagittal"], 
 def render_image(case_id: str, view: Literal["axial", "coronal", "sagittal"], slice_index: int,
                  labels: list[Label], render: RenderSettings | None = None,
                  hotspot_zones: list[HotspotZone] | None = None, output_dir: str | None = None,
-                 name: str | None = None, include_base64: bool = True) -> dict:
+                 name: str | None = None, include_base64: bool = True, shuffle_labels: bool = False,
+                 seed: int | None = None) -> dict:
     """Render a specific slice with labels. Returns image path (+ base64), answer key with arrow/label
-    geometry, and optional hotspot masks (transparent PNGs, pixel-aligned with the image)."""
+    geometry, and optional hotspot masks (transparent PNGs, pixel-aligned with the image).
+    ``shuffle_labels`` randomly reassigns the label texts among the groups (``seed`` to reproduce)."""
+    if shuffle_labels:
+        labels = _shuffle_labels(labels, seed)
     lv = None
     if view == "axial":
         l = sel.levels()
@@ -295,9 +370,13 @@ def labeled_image(labels: list[Label], view: ViewT = "auto", strategy: StrategyT
                   level: str | None = None, filters: CaseFilters | None = None,
                   render: RenderSettings | None = None, hotspot_zones: list[HotspotZone] | None = None,
                   context_structures: list[str] | None = None, top_k: int = 10, seed: int | None = None,
-                  output_dir: str | None = None, name: str | None = None, include_base64: bool = True) -> dict:
+                  output_dir: str | None = None, name: str | None = None, include_base64: bool = True,
+                  shuffle_labels: bool = False) -> dict:
     """Find a slice where every labeled structure (plus ``context_structures``) is visible, then render it.
-    Picks randomly among the ``top_k`` best cases so repeated calls vary (fix ``seed`` to reproduce)."""
+    Picks randomly among the ``top_k`` best cases so repeated calls vary (fix ``seed`` to reproduce).
+    ``shuffle_labels`` randomly reassigns the label texts among the groups so the answer's number varies."""
+    if shuffle_labels:
+        labels = _shuffle_labels(labels, None if seed is None else seed + 1)
     names = _resolve_all([s for l in labels for s in l.structures] + (context_structures or [])
                          + [s for z in hotspot_zones or [] for s in z.structures])
     rng = np.random.default_rng(seed)
@@ -325,6 +404,7 @@ class BatchRequest(BaseModel):
     context_structures: list[str] | None = None
     seed: int | None = None
     name: str | None = None
+    shuffle_labels: bool = False
 
 
 @mcp.tool()
@@ -344,7 +424,8 @@ def batch_labeled_images(requests: list[BatchRequest], output_dir: str | None = 
             try:
                 r = labeled_image(rq.labels, rq.view, rq.strategy, rq.level, f, rq.render, rq.hotspot_zones,
                                   rq.context_structures, seed=rq.seed, output_dir=str(d),
-                                  name=rq.name or f"q{i + 1:03d}", include_base64=False)
+                                  name=rq.name or f"q{i + 1:03d}", include_base64=False,
+                                  shuffle_labels=rq.shuffle_labels)
                 used.append(r["source"]["case_id"])
             except ValueError as e:
                 r = dict(error=str(e), request_index=i)

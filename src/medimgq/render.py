@@ -45,6 +45,9 @@ PALETTE: list[Color] = [(255, 214, 10), (0, 200, 255), (255, 90, 90), (110, 230,
 class LabelSpec:
     label: str  # "A", "1", or "" for a marker without text
     structures: list[str]  # canonical names
+    # Which piece to point at when a structure appears as several pieces on the slice
+    # (e.g. aortic root and descending aorta): largest, or a patient-relative direction.
+    component: str = "largest"  # largest | anterior | posterior | left | right | superior | inferior
 
 
 @dataclass
@@ -242,13 +245,38 @@ def _crop_box(hu: np.ndarray, masks: list[np.ndarray], axis: str, mode: str,
     return max(0, x0 - pad), max(0, y0 - pad), min(W, x1 + pad), min(H, y1 + pad)
 
 
-def _anchor(mask: np.ndarray) -> tuple[float, float] | None:
-    """Deepest point of the largest component (always inside the structure)."""
+COMPONENTS = ("largest", "anterior", "posterior", "left", "right", "superior", "inferior")
+
+# Image direction of each patient direction, per view, as (axis, sign): axis 0 = row (y), 1 = column (x);
+# sign -1 means "smallest coordinate". Radiological convention: patient's right is image left.
+_DIRECTIONS = {
+    "axial": {"anterior": (0, -1), "posterior": (0, 1), "right": (1, -1), "left": (1, 1)},
+    "coronal": {"superior": (0, -1), "inferior": (0, 1), "right": (1, -1), "left": (1, 1)},
+    "sagittal": {"superior": (0, -1), "inferior": (0, 1), "anterior": (1, -1), "posterior": (1, 1)},
+}
+
+
+def _anchor(mask: np.ndarray, component: str = "largest", axis: str = "axial") -> tuple[float, float] | None:
+    """Deepest point (always inside the structure) of the chosen connected piece.
+
+    ``largest`` picks the biggest piece; a direction picks the piece whose centroid lies furthest
+    that way in the patient (pieces under 15% of the largest are ignored as specks).
+    """
     lab, n = ndimage.label(mask)
     if n == 0:
         return None
     sizes = ndimage.sum_labels(mask, lab, index=np.arange(1, n + 1))
-    comp = lab == int(np.argmax(sizes)) + 1
+    pick = int(np.argmax(sizes))
+    if component != "largest":
+        dirs = _DIRECTIONS.get(axis, {})
+        if component not in dirs:
+            raise ValueError(f"component {component!r} is not visible in a {axis} view; "
+                             f"use one of {['largest', *dirs]}")
+        ax, sign = dirs[component]
+        keep = [i for i in range(n) if sizes[i] >= 0.15 * sizes.max()]
+        cents = ndimage.center_of_mass(mask, lab, index=[i + 1 for i in keep])
+        pick = keep[int(np.argmax([sign * c[ax] for c in cents]))]
+    comp = lab == pick + 1
     dt = ndimage.distance_transform_edt(np.pad(comp, 1))[1:-1, 1:-1]
     y, x = np.unravel_index(int(np.argmax(dt)), dt.shape)
     return float(x), float(y)
@@ -352,9 +380,10 @@ def render(case_id: str, axis: str, index: int, labels: list[LabelSpec],
     scratch = ImageDraw.Draw(base)
 
     # Per-structure anchors in output pixels.
+    component = {n: spec.component for spec in labels for n in spec.structures}
     anchors: dict[str, tuple[float, float]] = {}
     for n in names:
-        a = _anchor(masks[n])
+        a = _anchor(masks[n], component[n], axis)
         if a is not None:
             anchors[n] = ((a[0] + 0.5) * s, (a[1] + 0.5) * s)
 

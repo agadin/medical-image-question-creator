@@ -26,11 +26,15 @@ and the facts about it. Humans should read `README.md` instead.
 | `render_image` | `case_id`, `view`, `slice_index`, `labels` | render a slice you chose |
 | `labeled_image` | `labels` | find + render in one call (most common) |
 | `batch_labeled_images` | `requests: BatchRequest[]` | many images into one folder + `manifest.jsonl` (no base64) |
+| `list_findings` | none | which real pathologies the dataset contains (measured), thresholds, case counts |
+| `find_findings` | `finding` | cases with that finding, most severe first, with the axial slice to render |
 
 ### Argument shapes
 
 ```text
-Label        = { label: string, structures: string[] }      # label "" = arrow with no text
+Label        = { label: string, structures: string[],         # label "" = arrow with no text
+                 component?: "largest"|"anterior"|"posterior"|"left"|"right"|"superior"|"inferior" }
+                 # which piece to point at when the structure shows as several pieces (default largest)
 HotspotZone  = { id: string, structures: string[] }         # becomes <image>_mask_<id>.png
 CaseFilters  = { case_id?, pathology?: string[], pathology_location?: string[], study_type?: string[],
                  gender?: "m"|"f", age_min?, age_max?, phase?: string[], exclude_cases?: string[],
@@ -44,11 +48,16 @@ RenderSettings = { preset?="arrow_short", marker?, tip?: "center"|"edge", outlin
 
 labeled_image(labels, view?="auto", strategy?="classical", level?, filters?: CaseFilters,
               render?: RenderSettings, hotspot_zones?: HotspotZone[], context_structures?: string[],
-              top_k?=10, seed?, output_dir?, name?, include_base64?=true)
-render_image(case_id, view, slice_index, labels, render?, hotspot_zones?, output_dir?, name?, include_base64?=true)
+              top_k?=10, seed?, output_dir?, name?, include_base64?=true, shuffle_labels?=false)
+render_image(case_id, view, slice_index, labels, render?, hotspot_zones?, output_dir?, name?, include_base64?=true,
+             shuffle_labels?=false, seed?)
 find_slices(structures, view?="auto", strategy?="classical", level?, slice_index?, filters?, limit?=10, seed?)
 batch_labeled_images(requests: [{labels, view?, strategy?, level?, filters?, render?, hotspot_zones?,
-                     context_structures?, seed?, name?}], output_dir?, avoid_repeat_cases?=true)
+                     context_structures?, seed?, name?, shuffle_labels?}], output_dir?, avoid_repeat_cases?=true)
+list_findings()
+find_findings(finding, min_value?=threshold, max_value?, filters?: CaseFilters, limit?=10, most_severe_first?=true)
+  -> { finding, measure, unit, threshold, normal, note, structures_to_label[],
+       cases[{ case_id, value, view:"axial", slice, vertebral_level, case{...} }] }
 ```
 
 Enumerations:
@@ -61,6 +70,9 @@ Enumerations:
 - `window` presets: `soft_tissue`, `abdomen`, `liver`, `mediastinum`, `lung`, `bone`, `brain`, `angio`
 - `pathology`: `no_pathology`, `tumor`, `vascular`, `trauma`, `inflammation`, `bleeding`, `other`, `unclear`
 - `phase`: `non_contrast`, `arterial`, `venous`, `contrast_unknown_phase` (a heuristic estimate)
+- `finding`: `thoracic_aortic_aneurysm` (≥50 mm, 18 cases), `abdominal_aortic_aneurysm` (≥30 mm, 74),
+  `goiter` (≥35 mL, 7), `renal_cyst` (≥10 mm, 41), `cardiomegaly` (axial ratio ≥0.60, 33),
+  `splenomegaly` (≥450 mL, 48), `hepatomegaly` (≥2,400 mL, 36), `enlarged_prostate` (≥40 mL, men, 43)
 
 ### Names you can use
 
@@ -94,7 +106,8 @@ selection    { strategy, score, visibility{name: 0..1}, areas_mm2{name: mm2}, ca
 **Labeled multiple-choice question (most common)**
 
 1. Decide the answer structure and 3–4 distractors that plausibly sit near it on the same slice.
-2. Shuffle the numbers yourself so the answer isn't always "1".
+2. Vary the answer's number: pass `shuffle_labels: true`, or assign numbers yourself. Across a set of
+   questions, aim for an even spread of correct answers over A–E (choices listed 1..n mean number = letter).
 3. Call `labeled_image` with `labels=[{label:"1", structures:[...]}, ...]`.
 4. Look at the returned image, if your client can show it, and confirm each arrow is unambiguous.
 5. Use `answer_key` for the correct choice. Write the stem so the student must identify the structure and
@@ -112,6 +125,14 @@ selection    { strategy, score, visibility{name: 0..1}, areas_mm2{name: mm2}, ca
 Add the likely wrong clicks as zones so feedback can name what was clicked. Avoid answers smaller than
 about 150 mm² (check `slice_contents`), since they are hard to click.
 
+**Disease question (real pathology)**
+
+1. `list_findings()` to see what exists; `find_findings(finding)` for cases (most severe first).
+2. `render_image(case_id, "axial", slice, labels=[...])`, labeling `structures_to_label` plus neighbours
+   the disease affects (e.g. aneurysm → esophagus; goiter → trachea).
+3. Ask what the lesion does, not what it is called, for a second-order question. Look at the image: the
+   thresholds are screening values.
+
 **Arrow-only question** ("What is indicated by the arrow?"): `labels=[{label:"", structures:[X]}]`.
 
 **A specific vertebral level:** `strategy:"level", level:"T8"` (axial only).
@@ -128,14 +149,13 @@ writes `manifest.jsonl`.
   (e.g. thyroid and kidney) can never share an axial slice.
 - **Some names are unknown** (SMA, azygos, internal jugular vein, nerves). Pick something else.
 - **A structure that appears twice on a slice gets its arrow on the larger piece.** The aorta can show its
-  root and its descending part on one axial slice. Check `anchors_px` or the image, or choose a level where
-  it appears once.
+  root and its descending part on one axial slice. Set `component` (e.g. `"posterior"` for the descending
+  aorta on axial) and check the image.
 - **The window switches to lung whenever a lung lobe is labeled.** Pass `render.window:"soft_tissue"` to
   override.
 - **`source.case.pathology` describes the scan, not your structure.** Don't claim a lesion unless you can see
   it. Most images are normal; say "representative image" in stems that describe disease on a normal scan.
-- **Real disease can be found by measuring**, e.g. aortic aneurysm in `s1400` or `s1365`, and retrosternal
-  goiter in `s0522`. Use `render_image` with the case and slice.
+- **For real disease use `find_findings`.** Don't infer disease from `source.case.pathology`.
 - **Stated patient ages and sexes are your fiction** unless you copy `source.case`.
 - **Keep the attribution footer.** It is required by CC BY 4.0.
 - **The quality filters are on by default.** Leave them on unless a request fails.

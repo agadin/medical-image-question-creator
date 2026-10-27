@@ -6,6 +6,8 @@ readme = "README.md"
 authors = [
     { name = "agadin", email = "a.gadin@wustl.edu" }
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=2.3.0",

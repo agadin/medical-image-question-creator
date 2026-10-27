@@ -24,7 +24,7 @@ each with expert-reviewed outlines of 117 structures. CT comes first; X-ray and 
 - [What you can ask for](#what-you-can-ask-for)
 - [Options, with pictures](#options-with-pictures)
 - [What comes back](#what-comes-back)
-- [The seven tools](#the-seven-tools)
+- [The tools](#the-tools)
 - [Examples](#examples)
 - [Real pathology](#real-pathology)
 - [Limits and caveats](#limits-and-caveats)
@@ -73,6 +73,7 @@ uv sync
 ```bash
 uv run python -m medimgq.indexer --workers 12   # ~4 min: every structure on every slice
 uv run python -m medimgq.quality --workers 12   # ~4 min: noise, contrast phase, cut-off body, arms
+uv run python -m medimgq.findings --workers 12  # ~1 min: aneurysms, goiter, cysts, organ enlargement
 ```
 
 They are written to `data/index/` (about 160 MB).
@@ -80,7 +81,7 @@ They are written to `data/index/` (about 160 MB).
 **3. Check it works:**
 
 ```bash
-uv run pytest            # starts the server over stdio and calls every tool
+uv run pytest            # unit tests on synthetic scans + an end-to-end test that calls every tool
 ```
 
 | Environment variable | Default | Purpose |
@@ -126,6 +127,10 @@ brachiocephalic vein. Use numbers on the image and add four distractors."*
 - **Several structures per label.** `{"label": "2", "structures": ["kidneys"]}` puts one number on both
   kidneys.
 - **Unlabeled arrows.** A label of `""` draws an arrow with no text ("What is the structure at the arrow?").
+- **Shuffled numbers.** `shuffle_labels: true` reassigns the numbers randomly, so the answer isn't always
+  the first label you listed.
+- **Real pathology**: aortic aneurysms, goiters, renal cysts, cardiomegaly, enlarged spleen, liver or
+  prostate, found by measuring every scan (see [Real pathology](#real-pathology)).
 - **Bare images with hotspot masks** for click-the-structure questions.
 - **Patients by filter**: pathology category (tumor, vascular, trauma, inflammation, …), body region, scan
   type, sex, age, estimated contrast phase, or a specific case.
@@ -181,6 +186,15 @@ or `full`. A labeled structure is never cropped out.
 ### Arrow tips and shared labels: `render.tip`, `render.shared_mode`
 
 ![Center versus edge tips, and multi-arrow versus repeated shared labels](docs/images/tips_shared.webp)
+
+### Which piece to point at: `labels[].component`
+
+![The aorta label on the aortic root versus the descending aorta](docs/images/component.webp)
+
+Some structures appear as two pieces on one slice. On an axial slice at T8, for example, you can see both
+the aortic root and the descending aorta. By default the arrow goes to the largest piece. Set `component`
+to a patient direction (`anterior`, `posterior`, `left`, `right`, `superior`, `inferior`) to pick the piece
+lying furthest that way. Directions that a view can't show (e.g. `superior` on an axial slice) are rejected.
 
 ### Hotspot masks: `hotspot_zones`
 
@@ -260,7 +274,7 @@ Arrows are `[tail, tip]` pairs in output-image pixels. `outlines_px` is filled w
 
 ---
 
-## The seven tools
+## The tools
 
 | Tool | What it does |
 |---|---|
@@ -271,6 +285,11 @@ Arrows are `[tail, tip]` pairs in output-image pixels. `outlines_px` is filled w
 | `render_image(case_id, view, slice_index, labels, render?, hotspot_zones?)` | Render a slice you chose. |
 | `labeled_image(labels, view?, strategy?, level?, filters?, render?, hotspot_zones?, …)` | Find a slice and render it in one call. |
 | `batch_labeled_images(requests, output_dir?, avoid_repeat_cases?)` | Many images into one folder with a `manifest.jsonl`. |
+| `list_findings()` | Pathology the dataset contains, with definitions and case counts. |
+| `find_findings(finding, min_value?, max_value?, filters?, limit?)` | Cases with a finding, most severe first, with the slice to render. |
+
+`render_image`, `labeled_image` and batch requests also take `shuffle_labels` (and `render_image` a
+`seed`), and every label takes `component`.
 
 ---
 
@@ -315,6 +334,10 @@ Arrows are `[tail, tip]` pairs in output-image pixels. `outlines_px` is filled w
 }
 ```
 
+**A disease question:** call `find_findings` with `finding: "thoracic_aortic_aneurysm"`, then
+`render_image` with the returned `case_id` and `slice`, labeling `aorta` (with `component: "posterior"`),
+`esophagus` and `heart`.
+
 **Choosing distractors yourself:** call `find_slices`, then `slice_contents` on the chosen slice to see
 what else is visible, then `render_image` with the labels you want.
 
@@ -325,25 +348,34 @@ script that made the images for a 14-question practice bank, talking to the serv
 
 ## Real pathology
 
-Most scans show normal anatomy. The dataset's pathology labels are coarse (for example "vascular, thorax"),
-but the segmentations can be measured to find real disease:
+Most scans show normal anatomy, and the dataset's own pathology labels are coarse (for example
+"vascular, thorax"). So medimgq measures every scan and flags real findings:
 
 ![A thoracic aortic aneurysm and a retrosternal goiter](docs/images/pathology.webp)
 
-- **Aortic aneurysm:** widest aortic cross-section. The dataset median is 32 mm; case `s1400` is about 9 cm,
-  with mural thrombus.
-- **Goiter:** thyroid volume. The median is 13 mL; cases `s0522` and `s0927` are about 63 mL.
+| Finding | Measured as | Flagged at | Cases |
+|---|---|---|---|
+| Thoracic aortic aneurysm | widest aortic diameter, chest levels | ≥ 50 mm | 18 |
+| Abdominal aortic aneurysm | widest aortic diameter, lumbar levels | ≥ 30 mm | 74 |
+| Goiter | thyroid volume | ≥ 35 mL | 7 |
+| Renal cyst | largest cyst's diameter | ≥ 10 mm | 41 |
+| Cardiomegaly | heart width ÷ chest width on an axial slice (T5–T11) | ≥ 0.60 | 33 |
+| Splenomegaly | spleen volume | ≥ 450 mL | 48 |
+| Hepatomegaly | liver volume | ≥ 2,400 mL | 36 |
+| Enlarged prostate | prostate volume (men) | ≥ 40 mL | 43 |
 
-These searches aren't tools yet. For now, pick such a case with `render_image`.
-
----
+`list_findings` returns this table, and `find_findings` returns the cases, most severe first, with the
+axial slice that shows each finding best. The thresholds are screening values for finding teaching cases,
+not diagnoses, so look at every image. Each threshold was checked by viewing flagged cases near the cutoff
+and at the extreme. A hiatal hernia detector was tried and dropped because it mostly flagged normal
+stomachs.
 
 ## Limits and caveats
 
 - **Only segmented structures can be labeled.** Nerves, the azygos vein, the internal jugular veins,
   laryngeal cartilages and bowel segments aren't available.
 - **A structure that appears twice on a slice** (e.g. the aortic root and the descending aorta) gets its
-  arrow on the larger piece.
+  arrow on the larger piece unless you set `component`.
 - **Resolution is 1.5 mm**, so images are slightly softer than clinical CT.
 - **Pathology metadata describes the whole scan**, not the labeled structure.
 - **Contrast phase is an estimate** from the brightness of the aorta and portal vein.
@@ -356,13 +388,14 @@ These searches aren't tools yet. For now, pick such a case with `render_image`.
 
 ```
 src/medimgq/
-  server.py      MCP server (the 7 tools)
+  server.py      MCP server (9 tools)
   catalog.py     structure names, synonyms, groups, name resolution
   selection.py   slice search: strategies, textbook levels, filters
   render.py      labels, arrows, outlines, crop, window, hotspot masks
   volume.py      CT loading, radiological orientation, windows
   indexer.py     builds the structure/slice index
   quality.py     builds the quality index (noise, phase, truncation, arms)
+  findings.py    builds the findings index (aneurysm, goiter, cysts, organ enlargement)
 scripts/
   compare_strategies.py   contact sheet comparing slice strategies
   showcase_labels.py      contact sheet comparing label presets
@@ -370,7 +403,8 @@ scripts/
 examples/
   examsim_ct_bank.py      worked example: an MCP client building a question bank
 qc/blocklist.csv          cases rejected after review
-tests/test_server.py      end-to-end test over stdio
+tests/test_unit.py        unit tests on synthetic scans (no dataset needed)
+tests/test_server.py      end-to-end test over stdio (needs the dataset and indexes)
 ```
 
 ```bash
@@ -387,5 +421,7 @@ Images are derived from the **TotalSegmentator dataset v2.0.1** (Wasserthal J. e
 Robust Segmentation of 104 Anatomic Structures in CT Images*, Radiology: Artificial Intelligence, 2023),
 licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Every generated image carries this
 attribution in its footer.
+
+The code is released under the [MIT License](LICENSE).
 
 For educational use only. Not for clinical decision-making.

@@ -179,7 +179,8 @@ def slice_rows(names: list[str], axis: int, case_ids: list[str] | None = None) -
     return df
 
 
-def eligible_cases(f: Filters, required: list[str]) -> list[str]:
+def filtered_case_ids(f: Filters) -> set[str]:
+    """Cases passing the patient, blocklist, noise and contrast-phase filters."""
     c = cases()
     m = pd.Series(True, index=c.index)
     if f.case_id:
@@ -209,6 +210,12 @@ def eligible_cases(f: Filters, required: list[str]) -> list[str]:
         if f.phase:
             qm &= q.phase.isin(f.phase)
         ids &= set(q.case_id[qm])
+    return ids
+
+
+def eligible_cases(f: Filters, required: list[str]) -> list[str]:
+    """Cases passing ``filtered_case_ids`` that contain every required structure."""
+    ids = filtered_case_ids(f)
     s = structures()
     s = s[s.case_id.isin(ids) & s.structure.isin(required)]
     if not f.allow_edge_truncated:

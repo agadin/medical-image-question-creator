@@ -18,36 +18,37 @@ L = lambda label, *s: {"label": label, "structures": list(s)}  # noqa: E731
 
 REQUESTS = {
     # card 66/141: superior mediastinum, catheter via left IJV
-    "ct1": dict(labels=[L("A", "left brachiocephalic vein"), L("B", "right brachiocephalic vein"),
+    "ct1": dict(answer=('left brachiocephalic vein', "1"), labels=[L("A", "left brachiocephalic vein"), L("B", "right brachiocephalic vein"),
                         L("C", "brachiocephalic trunk"), L("D", "trachea"), L("E", "esophagus")]),
     # card 63: aortic arch aneurysm -> hoarseness
     "ct2": dict(labels=[L("", "aorta")], view="axial", strategy="max_area",
                 context_structures=["trachea"]),
     # card 26: enlarged left atrium compresses esophagus
-    "ct3": dict(labels=[L("A", "heart"), L("B", "esophagus"), L("C", "aorta"), L("D", "spinal cord")],
+    "ct3": dict(answer=('esophagus', "2"), labels=[L("A", "heart"), L("B", "esophagus"), {"label": "C", "structures": ["aorta"], "component": "posterior"},
+                        L("D", "spinal cord")],
                 level="T8", strategy="level"),
     # card 46/164: diaphragmatic openings
-    "ct4": dict(labels=[L("A", "inferior vena cava"), L("B", "esophagus"), L("C", "aorta"),
+    "ct4": dict(answer=('aorta', "3"), labels=[L("A", "inferior vena cava"), L("B", "esophagus"), L("C", "aorta"),
                         L("D", "liver"), L("E", "stomach")]),
     # card 135/72: silhouette of left heart border -> lingula (LUL)
-    "ct5": dict(labels=[L("A", "left upper lobe"), L("B", "left lower lobe"), L("C", "right middle lobe"),
+    "ct5": dict(answer=('left upper lobe', "5"), labels=[L("A", "left upper lobe"), L("B", "left lower lobe"), L("C", "right middle lobe"),
                         L("D", "right lower lobe"), L("E", "heart")]),
     # card 49: penetrating injury right 6th ICS midaxillary line
-    "ct6": dict(labels=[L("A", "right upper lobe"), L("B", "right middle lobe"), L("C", "right lower lobe"),
+    "ct6": dict(answer=('right lower lobe', "2"), labels=[L("A", "right upper lobe"), L("B", "right middle lobe"), L("C", "right lower lobe"),
                         L("D", "left upper lobe"), L("E", "left lower lobe")], view="coronal"),
     # card 110: recurrent laryngeal nerve in the tracheoesophageal groove
-    "ct7": dict(labels=[L("A", "thyroid"), L("B", "trachea"), L("C", "esophagus"),
+    "ct7": dict(answer=('common carotid arteries', "4"), labels=[L("A", "thyroid"), L("B", "trachea"), L("C", "esophagus"),
                         L("D", "common carotid arteries")], render={"shared_mode": "repeat"},
                 filters={"max_noise_hu": 30}),
     # card 140/17: right subclavian artery and the right recurrent laryngeal nerve
-    "ct8": dict(labels=[L("A", "right subclavian artery"), L("B", "right common carotid artery"),
+    "ct8": dict(answer=('right subclavian artery', "3"), labels=[L("A", "right subclavian artery"), L("B", "right common carotid artery"),
                         L("C", "left common carotid artery"), L("D", "left subclavian artery"), L("E", "trachea")],
                 filters={"max_noise_hu": 30}, strategy="level", level="T2"),
     # disease (real pathology; fixed case/slice via render_image)
-    "d1": dict(tool="render_image", case_id="s1400", view="axial", slice_index=315,
+    "d1": dict(answer=('esophagus', "4"), tool="render_image", case_id="s1400", view="axial", slice_index=315,
                labels=[L("A", "aorta"), L("B", "esophagus"), L("C", "heart"), L("D", "left lower lobe"),
                        L("E", "spinal cord")], render={"window": "soft_tissue"}),
-    "d2": dict(tool="render_image", case_id="s0522", view="axial", slice_index=173,
+    "d2": dict(answer=('trachea', "5"), tool="render_image", case_id="s0522", view="axial", slice_index=173,
                labels=[L("A", "thyroid"), L("B", "trachea"), L("C", "esophagus"),
                        L("D", "left common carotid artery"), L("E", "sternum")], render={"crop": "neck"}),
     "d3": dict(tool="render_image", case_id="s1365", view="axial", slice_index=313, labels=[],
@@ -80,14 +81,21 @@ REQUESTS = {
 
 
 def shuffle_letters(rq: dict, seed: int) -> dict:
-    """Number the labels in random order so the answer position varies. Numbers on the image keep
-    them distinct from the exam's A-E answer letters."""
+    """Number the labels in random order. Numbers on the image keep them distinct from the exam's
+    A-E answer letters. An ``answer`` entry pins the correct structure's number, so a bank can
+    spread its correct answers evenly across A-E (the choices are listed 1..n, so number = letter)."""
     import random
 
     labeled = [l for l in rq["labels"] if l["label"]]
-    letters = [str(i + 1) for i in range(len(labeled))]
-    random.Random(seed).shuffle(letters)
-    for l, ch in zip(labeled, letters):
+    numbers = [str(i + 1) for i in range(len(labeled))]
+    answer = rq.pop("answer", None)  # (structure, number): pin the correct answer's number
+    if answer:
+        target = next(l for l in labeled if l["structures"][0] == answer[0])
+        target["label"] = answer[1]
+        numbers.remove(answer[1])
+        labeled = [l for l in labeled if l is not target]
+    random.Random(seed).shuffle(numbers)
+    for l, ch in zip(labeled, numbers):
         l["label"] = ch
     rq["labels"] = sorted(rq["labels"], key=lambda l: l["label"])
     return rq

@@ -141,6 +141,15 @@ def main() -> None:
         ("shared_mode: repeat", "label repeated at each", shot(ABDOMEN, kid, shared_mode="repeat")),
     ], 4, "tips_shared.webp")
 
+    # 5b. Which piece to point at
+    t8 = ("s0651", "axial", 216, "T8")
+    sheet("Which piece to point at  (labels[].component)", [
+        ("component: largest", "default: the aortic root here",
+         shot(t8, [LabelSpec("1", ["aorta"], "largest"), LabelSpec("2", ["esophagus"])])),
+        ("component: posterior", "the descending aorta",
+         shot(t8, [LabelSpec("1", ["aorta"], "posterior"), LabelSpec("2", ["esophagus"])])),
+    ], 2, "component.webp", tile=440)
+
     # 6. Hotspot masks
     cid, axis, idx, level = ANEURYSM_HOT
     zones = [("esophagus", (60, 200, 90)), ("aorta", (230, 70, 70)), ("heart", (70, 140, 240)),

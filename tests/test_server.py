@@ -28,7 +28,7 @@ async def test_tools_end_to_end(tmp_path):
     async with Client(SERVER) as c:
         names = {t.name for t in (await c.list_tools()).tools}
         assert {"list_structures", "dataset_info", "find_slices", "slice_contents", "render_image",
-                "labeled_image", "batch_labeled_images"} <= names
+                "labeled_image", "batch_labeled_images", "list_findings", "find_findings"} <= names
 
         r = _data(await c.call_tool("list_structures", {"query": "IVC"}))
         assert r["resolved"] == ["inferior_vena_cava"]
@@ -58,3 +58,19 @@ async def test_tools_end_to_end(tmp_path):
         cases = [x["source"]["case_id"] for x in b["results"]]
         assert len(set(cases)) == 2  # avoid_repeat_cases
         assert (tmp_path / "batch" / "manifest.jsonl").read_text().count("\n") == 2
+
+        lf = _data(await c.call_tool("list_findings", {}))
+        assert {f["name"] for f in lf["measured_findings"]} >= {"thoracic_aortic_aneurysm", "goiter", "renal_cyst"}
+        ff = _data(await c.call_tool("find_findings", {"finding": "thoracic_aortic_aneurysm", "limit": 2}))
+        top = ff["cases"][0]
+        assert top["value"] >= ff["threshold"]
+
+        # render the finding, pointing at the descending (posterior) aorta, with shuffled numbers
+        r = _data(await c.call_tool("render_image", {
+            "case_id": top["case_id"], "view": "axial", "slice_index": top["slice"],
+            "labels": [{"label": "1", "structures": ["aorta"], "component": "posterior"},
+                       {"label": "2", "structures": ["heart"]}, {"label": "3", "structures": ["esophagus"]}],
+            "shuffle_labels": True, "seed": 5, "output_dir": str(tmp_path), "include_base64": False}))
+        assert sorted(r["answer_key"]) == ["1", "2", "3"]
+        assert set(r["answer_key"].values()) == {"aorta", "heart", "esophagus"}
+

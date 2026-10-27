@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="850" viewBox="0 0 1280 850" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#8a94a6"/>
@@ -14,12 +14,12 @@
     </style>
   </defs>
 
-  <rect width="1280" height="760" fill="#f6f7f9"/>
+  <rect width="1280" height="850" fill="#f6f7f9"/>
   <text x="40" y="52" font-size="28" font-weight="800" fill="#1c2026">medimgq: every option at a glance</text>
   <text x="40" y="78" class="note">An AI asks for structures; the server finds a slice, renders labels, and returns the image with its answer key.</text>
 
   <!-- 1. Ask -->
-  <rect x="40" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="40" y="104" width="270" height="530" rx="14" class="card"/>
   <rect x="40" y="104" width="270" height="8" rx="4" fill="#3b82f6"/>
   <text x="62" y="140" class="step" fill="#3b82f6">1  ASK</text>
   <text x="62" y="166" class="h">What to label</text>
@@ -39,9 +39,11 @@
   <text x="62" y="494" class="v">{ id, structures } -> mask PNG</text>
   <text x="62" y="524" class="k">context_structures</text>
   <text x="62" y="544" class="v">must be visible, not labeled</text>
+  <text x="62" y="574" class="k">component</text>
+  <text x="62" y="594" class="v">which piece: largest | posterior ...</text>
 
   <!-- 2. Find -->
-  <rect x="345" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="345" y="104" width="270" height="530" rx="14" class="card"/>
   <rect x="345" y="104" width="270" height="8" rx="4" fill="#8b5cf6"/>
   <text x="367" y="140" class="step" fill="#8b5cf6">2  FIND A SLICE</text>
   <text x="367" y="166" class="h">Where to look</text>
@@ -61,9 +63,11 @@
   <text x="367" y="494" class="v">arms in view, scan ends</text>
   <text x="367" y="524" class="k">top_k, seed</text>
   <text x="367" y="544" class="v">variety vs. reproducibility</text>
+  <text x="367" y="574" class="k">find_findings</text>
+  <text x="367" y="594" class="v">real disease: aneurysm, goiter ...</text>
 
   <!-- 3. Render -->
-  <rect x="650" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="650" y="104" width="270" height="530" rx="14" class="card"/>
   <rect x="650" y="104" width="270" height="8" rx="4" fill="#f59e0b"/>
   <text x="672" y="140" class="step" fill="#d97706">3  RENDER</text>
   <text x="672" y="166" class="h">How it looks</text>
@@ -85,7 +89,7 @@
   <text x="672" y="544" class="v">size, outline, format (png/webp/jpeg)</text>
 
   <!-- 4. Get back -->
-  <rect x="955" y="104" width="285" height="480" rx="14" class="card"/>
+  <rect x="955" y="104" width="285" height="530" rx="14" class="card"/>
   <rect x="955" y="104" width="285" height="8" rx="4" fill="#10b981"/>
   <text x="977" y="140" class="step" fill="#059669">4  GET BACK</text>
   <text x="977" y="166" class="h">What you receive</text>
@@ -104,23 +108,27 @@
   <text x="977" y="476" class="v">window, crop, patient metadata</text>
   <text x="977" y="506" class="k">selection</text>
   <text x="977" y="526" class="v">visibility and area per structure</text>
+  <text x="977" y="556" class="k">shuffle_labels</text>
+  <text x="977" y="576" class="v">vary which number is the answer</text>
 
   <!-- flow arrows -->
-  <line x1="312" y1="344" x2="341" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
-  <line x1="617" y1="344" x2="646" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
-  <line x1="922" y1="344" x2="951" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="312" y1="369" x2="341" y2="369" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="617" y1="369" x2="646" y2="369" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="922" y1="369" x2="951" y2="369" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
 
   <!-- tools -->
-  <text x="40" y="626" font-size="16" font-weight="700" fill="#1c2026">MCP tools</text>
+  <text x="40" y="676" font-size="16" font-weight="700" fill="#1c2026">MCP tools</text>
   <g>
-    <rect x="40" y="640" width="160" height="36" rx="8" fill="#e8f0fe"/><text x="56" y="663" class="tool">list_structures</text>
-    <rect x="210" y="640" width="140" height="36" rx="8" fill="#e8f0fe"/><text x="226" y="663" class="tool">dataset_info</text>
-    <rect x="360" y="640" width="130" height="36" rx="8" fill="#f1ebfe"/><text x="376" y="663" class="tool">find_slices</text>
-    <rect x="500" y="640" width="160" height="36" rx="8" fill="#f1ebfe"/><text x="516" y="663" class="tool">slice_contents</text>
-    <rect x="670" y="640" width="150" height="36" rx="8" fill="#fef3e2"/><text x="686" y="663" class="tool">render_image</text>
-    <rect x="830" y="640" width="160" height="36" rx="8" fill="#e3f7ef"/><text x="846" y="663" class="tool">labeled_image</text>
-    <rect x="1000" y="640" width="240" height="36" rx="8" fill="#e3f7ef"/><text x="1016" y="663" class="tool">batch_labeled_images</text>
+    <rect x="40" y="690" width="160" height="36" rx="8" fill="#e8f0fe"/><text x="56" y="713" class="tool">list_structures</text>
+    <rect x="210" y="690" width="140" height="36" rx="8" fill="#e8f0fe"/><text x="226" y="713" class="tool">dataset_info</text>
+    <rect x="360" y="690" width="150" height="36" rx="8" fill="#e8f0fe"/><text x="376" y="713" class="tool">list_findings</text>
+    <rect x="520" y="690" width="150" height="36" rx="8" fill="#f1ebfe"/><text x="536" y="713" class="tool">find_findings</text>
+    <rect x="680" y="690" width="130" height="36" rx="8" fill="#f1ebfe"/><text x="696" y="713" class="tool">find_slices</text>
+    <rect x="820" y="690" width="160" height="36" rx="8" fill="#f1ebfe"/><text x="836" y="713" class="tool">slice_contents</text>
+    <rect x="990" y="690" width="150" height="36" rx="8" fill="#fef3e2"/><text x="1006" y="713" class="tool">render_image</text>
+    <rect x="40" y="736" width="160" height="36" rx="8" fill="#e3f7ef"/><text x="56" y="759" class="tool">labeled_image</text>
+    <rect x="210" y="736" width="240" height="36" rx="8" fill="#e3f7ef"/><text x="226" y="759" class="tool">batch_labeled_images</text>
   </g>
-  <text x="40" y="708" class="note">labeled_image = find + render in one call.  render_image = you choose case and slice.  batch_labeled_images = many requests, one manifest.jsonl.</text>
-  <text x="40" y="732" class="note">Data: TotalSegmentator v2.0.1 CT (1,228 scans, 1.5 mm, CC BY 4.0). Images are in radiological convention: patient's right on the image left.</text>
+  <text x="40" y="806" class="note">labeled_image = find + render in one call.  render_image = you choose case and slice.  find_findings = real pathology.  batch = many requests, one manifest.</text>
+  <text x="40" y="830" class="note">Data: TotalSegmentator v2.0.1 CT (1,228 scans, 1.5 mm, CC BY 4.0). Images are in radiological convention: patient’s right on the image left.</text>
 </svg>
