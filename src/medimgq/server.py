@@ -144,10 +144,14 @@ def _out_path(output_dir: str | None, name: str | None, fmt: str, seed_text: str
 def _render_and_save(case_id: str, view: str, slice_index: int, labels: list[Label],
                      settings: RenderSettings, hotspot_zones: list[HotspotZone] | None,
                      output_dir: str | None, name: str | None, include_base64: bool,
-                     level: str | None = None, extra: dict | None = None) -> dict:
+                     level: str | None = None, extra: dict | None = None,
+                     context_structures: list[str] | None = None) -> dict:
     specs = [LabelSpec(l.label, _resolve_all(l.structures)) for l in labels]
     o = settings.options()
-    r = render(case_id, view, slice_index, specs, o, level=level)
+    # Hotspot zones and context structures also drive cropping and the auto window
+    # (a bare hotspot image has no labels).
+    context = _resolve_all([s for z in hotspot_zones or [] for s in z.structures] + (context_structures or []))
+    r = render(case_id, view, slice_index, specs, o, level=level, context=context)
     seed_text = json.dumps([case_id, view, slice_index, [l.model_dump() for l in labels],
                             settings.model_dump(), time.time()])
     path = _out_path(output_dir, name, settings.format, seed_text)
@@ -293,7 +297,8 @@ def labeled_image(labels: list[Label], view: ViewT = "auto", strategy: StrategyT
                   output_dir: str | None = None, name: str | None = None, include_base64: bool = True) -> dict:
     """Find a slice where every labeled structure (plus ``context_structures``) is visible, then render it.
     Picks randomly among the ``top_k`` best cases so repeated calls vary (fix ``seed`` to reproduce)."""
-    names = _resolve_all([s for l in labels for s in l.structures] + (context_structures or []))
+    names = _resolve_all([s for l in labels for s in l.structures] + (context_structures or [])
+                         + [s for z in hotspot_zones or [] for s in z.structures])
     rng = np.random.default_rng(seed)
     cands = sel.candidates(names, view=view, strategy=strategy, filters=_filters(filters), level=level,
                            rng=rng, limit=max(top_k, 1))
@@ -304,7 +309,8 @@ def labeled_image(labels: list[Label], view: ViewT = "auto", strategy: StrategyT
     sel_info = dict(selection=dict(strategy=c.strategy, score=round(c.score, 3), visibility=c.visibility,
                                    areas_mm2=c.areas_mm2, candidates_considered=len(cands)))
     return _render_and_save(c.case_id, c.axis, c.slice, labels, render or RenderSettings(), hotspot_zones,
-                            output_dir, name, include_base64, level=c.level, extra=sel_info)
+                            output_dir, name, include_base64, level=c.level, extra=sel_info,
+                            context_structures=context_structures)
 
 
 class BatchRequest(BaseModel):

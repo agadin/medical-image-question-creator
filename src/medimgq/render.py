@@ -333,7 +333,7 @@ def render(case_id: str, axis: str, index: int, labels: list[LabelSpec],
     region_masks: list[np.ndarray] = []
     if o.crop in ("auto", "neck", "chest", "abdomen"):
         lungs = [take_slice(load_mask(case_id, n), axis, index) for n in REGION_ANCHORS["chest"][:5]] if axis == "axial" else []
-        region = o.crop if o.crop != "auto" else auto_region(axis, level, names, int(sum(m.sum() for m in lungs)))
+        region = o.crop if o.crop != "auto" else auto_region(axis, level, names or list(context), int(sum(m.sum() for m in lungs)))
         if region in REGION_ANCHORS:
             region_masks = [take_slice(load_mask(case_id, n), axis, index) for n in REGION_ANCHORS[region]]
     x0, y0, x1, y1 = _crop_box(hu, present, axis, o.crop, region_masks, region)
@@ -342,7 +342,7 @@ def render(case_id: str, axis: str, index: int, labels: list[LabelSpec],
 
     s = o.size / max(hu.shape)
     W, H = round(hu.shape[1] * s), round(hu.shape[0] * s)
-    window = auto_window(names) if o.window == "auto" else o.window
+    window = auto_window(names or list(context)) if o.window == "auto" else o.window
     base = Image.fromarray(apply_window(hu, window)).resize((W, H), Image.Resampling.LANCZOS).convert("RGB")
 
     fs = o.font_size or max(14, round(o.size * 0.042))
