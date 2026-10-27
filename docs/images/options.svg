@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a94a6"/>
+    </marker>
+    <style>
+      .card { fill: #ffffff; stroke: #dde1e7; stroke-width: 1.5; }
+      .h { font-size: 20px; font-weight: 700; fill: #1c2026; }
+      .step { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+      .k { font-size: 14px; font-weight: 600; fill: #1c2026; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .v { font-size: 13px; fill: #5b6474; }
+      .note { font-size: 13px; fill: #5b6474; }
+      .tool { font-size: 14px; font-weight: 600; fill: #1c2026; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="760" fill="#f6f7f9"/>
+  <text x="40" y="52" font-size="28" font-weight="800" fill="#1c2026">medimgq: every option at a glance</text>
+  <text x="40" y="78" class="note">An AI asks for structures; the server finds a slice, renders labels, and returns the image with its answer key.</text>
+
+  <!-- 1. Ask -->
+  <rect x="40" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="40" y="104" width="270" height="8" rx="4" fill="#3b82f6"/>
+  <text x="62" y="140" class="step" fill="#3b82f6">1  ASK</text>
+  <text x="62" y="166" class="h">What to label</text>
+  <text x="62" y="202" class="k">labels[]</text>
+  <text x="62" y="222" class="v">{ label: "1", structures: [...] }</text>
+  <text x="62" y="252" class="k">structures</text>
+  <text x="62" y="272" class="v">117 TotalSegmentator names</text>
+  <text x="62" y="290" class="v">synonyms: "IVC", "LUL", "L1"</text>
+  <text x="62" y="308" class="v">unsided: "kidney" = both</text>
+  <text x="62" y="326" class="v">groups: "ribs", "lumbar spine"</text>
+  <text x="62" y="356" class="k">label text</text>
+  <text x="62" y="376" class="v">"1".."9" (recommended), "A",</text>
+  <text x="62" y="394" class="v">or "" = arrow with no text</text>
+  <text x="62" y="424" class="k">shared label</text>
+  <text x="62" y="444" class="v">several structures, one number</text>
+  <text x="62" y="474" class="k">hotspot_zones[]</text>
+  <text x="62" y="494" class="v">{ id, structures } -> mask PNG</text>
+  <text x="62" y="524" class="k">context_structures</text>
+  <text x="62" y="544" class="v">must be visible, not labeled</text>
+
+  <!-- 2. Find -->
+  <rect x="345" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="345" y="104" width="270" height="8" rx="4" fill="#8b5cf6"/>
+  <text x="367" y="140" class="step" fill="#8b5cf6">2  FIND A SLICE</text>
+  <text x="367" y="166" class="h">Where to look</text>
+  <text x="367" y="202" class="k">view</text>
+  <text x="367" y="222" class="v">auto | axial | coronal | sagittal</text>
+  <text x="367" y="252" class="k">strategy</text>
+  <text x="367" y="272" class="v">classical (textbook level)</text>
+  <text x="367" y="290" class="v">max_visibility | max_area</text>
+  <text x="367" y="308" class="v">random | level | index</text>
+  <text x="367" y="338" class="k">level</text>
+  <text x="367" y="358" class="v">vertebral level, e.g. "T8"</text>
+  <text x="367" y="388" class="k">filters</text>
+  <text x="367" y="408" class="v">pathology, location, study type,</text>
+  <text x="367" y="426" class="v">sex, age, contrast phase, case</text>
+  <text x="367" y="456" class="k">quality (on by default)</text>
+  <text x="367" y="476" class="v">noise, cut-off body or organ,</text>
+  <text x="367" y="494" class="v">arms in view, scan ends</text>
+  <text x="367" y="524" class="k">top_k, seed</text>
+  <text x="367" y="544" class="v">variety vs. reproducibility</text>
+
+  <!-- 3. Render -->
+  <rect x="650" y="104" width="270" height="480" rx="14" class="card"/>
+  <rect x="650" y="104" width="270" height="8" rx="4" fill="#f59e0b"/>
+  <text x="672" y="140" class="step" fill="#d97706">3  RENDER</text>
+  <text x="672" y="166" class="h">How it looks</text>
+  <text x="672" y="202" class="k">preset</text>
+  <text x="672" y="222" class="v">arrow_short (default), arrow_margin,</text>
+  <text x="672" y="240" class="v">on_structure, outline_*, boxed_margin,</text>
+  <text x="672" y="258" class="v">yellow_short, edge_arrows, bare</text>
+  <text x="672" y="288" class="k">tip</text>
+  <text x="672" y="308" class="v">center | edge</text>
+  <text x="672" y="338" class="k">shared_mode</text>
+  <text x="672" y="358" class="v">multi_arrow | repeat</text>
+  <text x="672" y="388" class="k">crop</text>
+  <text x="672" y="408" class="v">auto | neck | chest | abdomen |</text>
+  <text x="672" y="426" class="v">body | targets | full</text>
+  <text x="672" y="456" class="k">window</text>
+  <text x="672" y="476" class="v">auto | soft_tissue | lung | bone ...</text>
+  <text x="672" y="506" class="k">style</text>
+  <text x="672" y="526" class="v">text_style, colors, font_size,</text>
+  <text x="672" y="544" class="v">size, outline, format (png/webp/jpeg)</text>
+
+  <!-- 4. Get back -->
+  <rect x="955" y="104" width="285" height="480" rx="14" class="card"/>
+  <rect x="955" y="104" width="285" height="8" rx="4" fill="#10b981"/>
+  <text x="977" y="140" class="step" fill="#059669">4  GET BACK</text>
+  <text x="977" y="166" class="h">What you receive</text>
+  <text x="977" y="202" class="k">image_path / image_base64</text>
+  <text x="977" y="222" class="v">labeled PNG, attribution footer</text>
+  <text x="977" y="252" class="k">answer_key</text>
+  <text x="977" y="272" class="v">{ "1": "pancreas", ... }</text>
+  <text x="977" y="302" class="k">key[]</text>
+  <text x="977" y="322" class="v">arrow tail/tip, label box,</text>
+  <text x="977" y="340" class="v">outline polygons, area (mm2)</text>
+  <text x="977" y="370" class="k">hotspot_masks[]</text>
+  <text x="977" y="390" class="v">transparent PNG per zone,</text>
+  <text x="977" y="408" class="v">pixel-aligned with the image</text>
+  <text x="977" y="438" class="k">source</text>
+  <text x="977" y="458" class="v">case, view, slice, vertebral level,</text>
+  <text x="977" y="476" class="v">window, crop, patient metadata</text>
+  <text x="977" y="506" class="k">selection</text>
+  <text x="977" y="526" class="v">visibility and area per structure</text>
+
+  <!-- flow arrows -->
+  <line x1="312" y1="344" x2="341" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="617" y1="344" x2="646" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+  <line x1="922" y1="344" x2="951" y2="344" stroke="#8a94a6" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <!-- tools -->
+  <text x="40" y="626" font-size="16" font-weight="700" fill="#1c2026">MCP tools</text>
+  <g>
+    <rect x="40" y="640" width="160" height="36" rx="8" fill="#e8f0fe"/><text x="56" y="663" class="tool">list_structures</text>
+    <rect x="210" y="640" width="140" height="36" rx="8" fill="#e8f0fe"/><text x="226" y="663" class="tool">dataset_info</text>
+    <rect x="360" y="640" width="130" height="36" rx="8" fill="#f1ebfe"/><text x="376" y="663" class="tool">find_slices</text>
+    <rect x="500" y="640" width="160" height="36" rx="8" fill="#f1ebfe"/><text x="516" y="663" class="tool">slice_contents</text>
+    <rect x="670" y="640" width="150" height="36" rx="8" fill="#fef3e2"/><text x="686" y="663" class="tool">render_image</text>
+    <rect x="830" y="640" width="160" height="36" rx="8" fill="#e3f7ef"/><text x="846" y="663" class="tool">labeled_image</text>
+    <rect x="1000" y="640" width="240" height="36" rx="8" fill="#e3f7ef"/><text x="1016" y="663" class="tool">batch_labeled_images</text>
+  </g>
+  <text x="40" y="708" class="note">labeled_image = find + render in one call.  render_image = you choose case and slice.  batch_labeled_images = many requests, one manifest.jsonl.</text>
+  <text x="40" y="732" class="note">Data: TotalSegmentator v2.0.1 CT (1,228 scans, 1.5 mm, CC BY 4.0). Images are in radiological convention: patient's right on the image left.</text>
+</svg>

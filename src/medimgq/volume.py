@@ -69,4 +69,7 @@ def to_display_coords(axis: str | int, shape: tuple[int, int, int], u: float, v:
 def apply_window(hu: np.ndarray, window: str | tuple[float, float]) -> np.ndarray:
     w, l = WINDOWS[window] if isinstance(window, str) else window
     lo = l - w / 2
-    return (np.clip((hu.astype(np.float32) - lo) / w, 0, 1) * 255).astype(np.uint8)
+    # Pixels outside the scanner's reconstruction field of view are stored far below
+    # air (e.g. -3024 HU); treat them as air so wide windows show no FOV rectangle.
+    hu = np.maximum(hu.astype(np.float32), -1024)
+    return (np.clip((hu - lo) / w, 0, 1) * 255).astype(np.uint8)
