@@ -100,9 +100,34 @@ class Rendered:
     crop_box: tuple[int, int, int, int]  # in slice pixels: x0, y0, x1, y1
     scale: float  # output px per slice px
     offset: tuple[int, int]  # top-left of image area within the output canvas
+    case_id: str = ""
+    axis: str = ""
+    index: int = 0
+    window: str | tuple[float, float] = ""
+    region: str | None = None
 
     def key_dicts(self) -> list[dict]:
         return [asdict(k) for k in self.key]
+
+    def mask_image(self, structures: list[str], color: Color = (0, 0, 0)) -> Image.Image:
+        """RGBA mask the size of ``image``: the structures' pixels painted, the rest transparent.
+
+        Pixel-aligned with the rendered image, so it can serve as a hotspot answer region.
+        """
+        x0, y0, x1, y1 = self.crop_box
+        m = np.zeros((y1 - y0, x1 - x0), bool)
+        for n in structures:
+            m |= take_slice(load_mask(self.case_id, n), self.axis, self.index)[y0:y1, x0:x1]
+        W = round((x1 - x0) * self.scale)
+        H = round((y1 - y0) * self.scale)
+        small = Image.fromarray(m.astype(np.uint8) * 255).resize((W, H), Image.Resampling.BILINEAR)
+        alpha = np.zeros((self.image.height, self.image.width), np.uint8)
+        a = (np.asarray(small) >= 128).astype(np.uint8) * 255
+        alpha[self.offset[1]:self.offset[1] + H, self.offset[0]:self.offset[0] + W] = a
+        rgba = np.zeros((*alpha.shape, 4), np.uint8)
+        rgba[..., :3] = color
+        rgba[..., 3] = alpha
+        return Image.fromarray(rgba, "RGBA")
 
 
 # ---------------------------------------------------------------- geometry
@@ -409,7 +434,7 @@ def render(case_id: str, axis: str, index: int, labels: list[LabelSpec],
         fsz = max(10, round(o.size * 0.017))
         d.text((canvas.width / 2, H + footer / 2), o.footer_text, font=_font(fsz) if fsz >= 12 else ImageFont.load_default(fsz),
                fill=(150, 150, 150), anchor="mm")
-    return Rendered(canvas, key, (x0, y0, x1, y1), s, off)
+    return Rendered(canvas, key, (x0, y0, x1, y1), s, off, case_id, axis, index, window, region)
 
 
 def _place_on_structure(d, labels, key, anchors, shift, font, pad, o) -> None:

@@ -4,8 +4,8 @@ An MCP server that another AI can call to generate **labeled medical images** fo
 medical-school practice exams, together with a machine-readable **answer key**.
 CT first (TotalSegmentator, 117 structures); X-ray and MRI later.
 
-> Status: early development. Catalog, dataset/quality index, slice selection, and label rendering work;
-> the question generator and MCP server are in progress.
+> Status: early development. The MCP server, slice search, and renderer work. Question writing is
+> left to the calling AI: the server provides images, answer keys, and hotspot masks.
 
 ## Question type: `labeled`
 
@@ -19,6 +19,26 @@ The tool:
 - labels with letters, numbers, or nothing (bare image), using arrows, on-structure
   markers, or outlines,
 - returns the PNG (file path + base64) and a key mapping each label to its structure(s).
+
+## MCP server
+
+```bash
+claude mcp add medimgq -- uv run --directory /path/to/medical_image_question_creator medimgq-mcp
+```
+
+| Tool | Purpose |
+|---|---|
+| `list_structures` | labelable structures, synonyms, groups |
+| `dataset_info` | filter values (pathology, study type, contrast phase), windows, presets |
+| `find_slices` | rank (case, view, slice) candidates showing given structures |
+| `slice_contents` | structures visible on a slice, for picking distractors |
+| `render_image` | render a specific slice with labels and optional hotspot masks |
+| `labeled_image` | find + render in one call |
+| `batch_labeled_images` | many requests into a folder with `manifest.jsonl` |
+
+Every image comes back with a file path (and base64 if requested) and a key: label → structures,
+arrow tail/tip and label-box coordinates, outline polygons, and per-structure area. Hotspot masks are
+transparent PNGs pixel-aligned with the image.
 
 ## Data
 
@@ -50,6 +70,7 @@ uv run python scripts/compare_strategies.py     # contact sheet comparing slice 
 - `scripts/compare_strategies.py` — renders a strategy-comparison contact sheet
 - `scripts/showcase_labels.py` — renders the same scenes with every label preset
 - `qc/blocklist.csv` — cases excluded after human review
+- `src/medimgq/server.py` — MCP server (stdio)
 - `src/medimgq/config.py` — paths (override with `MEDIMGQ_TS_ROOT`, `MEDIMGQ_INDEX_DIR`, `MEDIMGQ_OUTPUT_DIR`)
 
 ## Intended use
