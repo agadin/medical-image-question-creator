@@ -43,6 +43,19 @@ REQUESTS = {
     "ct8": dict(labels=[L("A", "right subclavian artery"), L("B", "right common carotid artery"),
                         L("C", "left common carotid artery"), L("D", "left subclavian artery"), L("E", "trachea")],
                 filters={"max_noise_hu": 30}, strategy="level", level="T2"),
+    # disease (real pathology; fixed case/slice via render_image)
+    "d1": dict(tool="render_image", case_id="s1400", view="axial", slice_index=315,
+               labels=[L("A", "aorta"), L("B", "esophagus"), L("C", "heart"), L("D", "left lower lobe"),
+                       L("E", "spinal cord")], render={"window": "soft_tissue"}),
+    "d2": dict(tool="render_image", case_id="s0522", view="axial", slice_index=173,
+               labels=[L("A", "thyroid"), L("B", "trachea"), L("C", "esophagus"),
+                       L("D", "left common carotid artery"), L("E", "sternum")], render={"crop": "neck"}),
+    "d3": dict(tool="render_image", case_id="s1365", view="axial", slice_index=313, labels=[],
+               render={"preset": "bare", "window": "soft_tissue"}, hotspot_zones=[
+                   {"id": "esophagus", "structures": ["esophagus"]},
+                   {"id": "aorta", "structures": ["aorta"]},
+                   {"id": "heart", "structures": ["heart"]},
+                   {"id": "cord", "structures": ["spinal cord"]}]),
     # hotspots (bare images)
     "h1": dict(labels=[], render={"preset": "bare"}, hotspot_zones=[
         {"id": "lbcv", "structures": ["left brachiocephalic vein"]},
@@ -67,11 +80,12 @@ REQUESTS = {
 
 
 def shuffle_letters(rq: dict, seed: int) -> dict:
-    """Assign letters randomly so the answer position varies (what a question writer would do)."""
+    """Number the labels in random order so the answer position varies. Numbers on the image keep
+    them distinct from the exam's A-E answer letters."""
     import random
 
     labeled = [l for l in rq["labels"] if l["label"]]
-    letters = [chr(65 + i) for i in range(len(labeled))]
+    letters = [str(i + 1) for i in range(len(labeled))]
     random.Random(seed).shuffle(letters)
     for l, ch in zip(labeled, letters):
         l["label"] = ch
@@ -90,9 +104,14 @@ async def main() -> None:
             if ONLY and qid not in ONLY:
                 continue
             rq = shuffle_letters(rq, seed=sum(map(ord, qid)))
-            args = dict(rq, seed=rq.get("seed", 7), output_dir=str(OUT), name=qid, include_base64=False,
-                        filters={"exclude_cases": used, **rq.get("filters", {})})
-            res = await c.call_tool("labeled_image", args)
+            rq = dict(rq)
+            tool = rq.pop("tool", "labeled_image")
+            if tool == "render_image":
+                args = dict(rq, output_dir=str(OUT), name=qid, include_base64=False)
+            else:
+                args = dict(rq, seed=rq.get("seed", 7), output_dir=str(OUT), name=qid, include_base64=False,
+                            filters={"exclude_cases": used, **rq.get("filters", {})})
+            res = await c.call_tool(tool, args)
             if res.is_error:
                 print(qid, "ERROR", res.content[0].text)
                 continue

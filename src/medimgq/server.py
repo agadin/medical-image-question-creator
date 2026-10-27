@@ -37,10 +37,11 @@ mcp = MCPServer(
     name="medimgq",
     instructions=(
         "Generate labeled CT images (TotalSegmentator, 117 structures, 1.5 mm) for medical exam questions. "
-        "Typical flow: labeled_image(labels=[{label:'A', structures:['pancreas']}, ...]) -> image + answer key. "
+        "Typical flow: labeled_image(labels=[{label:'1', structures:['pancreas']}, ...]) -> image + answer key. "
         "For control: find_slices -> slice_contents (pick distractors) -> render_image. "
         "Structure names accept synonyms ('IVC'), unsided names ('kidney' = both), and groups ('lumbar spine'). "
-        "Labels with several structures share one letter. A label of '' draws an arrow with no text. "
+        "Labels with several structures share one label. A label of '' draws an arrow with no text. "
+        "Prefer numbers ('1', '2', ...) on images so they don't collide with A-E answer letters. "
         "Images are in radiological convention (patient's right on image left). "
         "Case pathology metadata describes the whole scan, not a labeled structure."
     ),
